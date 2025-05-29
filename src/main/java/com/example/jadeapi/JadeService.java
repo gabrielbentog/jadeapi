@@ -1,16 +1,15 @@
 package com.example.jadeapi;
 
+import javax.annotation.PostConstruct;
+
+import org.springframework.stereotype.Service;
+
 import jade.core.AID;
-import jade.core.Agent;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
 import jade.core.Runtime;
 import jade.lang.acl.ACLMessage;
 import jade.wrapper.AgentContainer;
-
-import org.springframework.stereotype.Service;
-
-import javax.annotation.PostConstruct;
 
 @Service
 public class JadeService {
@@ -26,7 +25,8 @@ public class JadeService {
         try {
             container.createNewAgent("eco", EcoAgent.class.getName(), null).start();
         } catch (Exception e) {
-            e.printStackTrace();
+            // Use a logger instead of printStackTrace
+            System.err.println("Error creating agent: " + e.getMessage());
         }
     }
 
@@ -38,7 +38,8 @@ public class JadeService {
         try {
             container.createNewAgent("tempSender", SenderAgent.class.getName(), new Object[]{msg}).start();
         } catch (Exception e) {
-            e.printStackTrace();
+            // Use a logger instead of printStackTrace
+            System.err.println("Error sending message: " + e.getMessage());
         }
     }
 }

@@ -1,26 +1,38 @@
 package com.example.jadeapi.service;
 
-import com.example.jadeapi.dto.AlternativeDTO;
-import com.example.jadeapi.dto.QuestionDTO;
-import com.example.jadeapi.dto.QuizDisplayDTO;
-import com.example.jadeapi.dto.StartQuizDTO;
-import com.example.jadeapi.dto.StudentAnswerDTO;
-import com.example.jadeapi.dto.AttemptResultDTO;
-import com.example.jadeapi.dto.AnswerFeedbackDTO;
-import com.example.jadeapi.model.*; // Importa todas as entidades do model
-import com.example.jadeapi.repository.*; // Importa todos os repositórios
-import com.example.jadeapi.model.enums.AttemptStatus; 
-import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 import com.example.jadeapi.JadeService;
-import java.util.Locale;
+import com.example.jadeapi.dto.AlternativeDTO; // Corrigido para o local correto se você não tem subpacote enums
+import com.example.jadeapi.dto.AnswerFeedbackDTO;
+import com.example.jadeapi.dto.AttemptResultDTO;
+import com.example.jadeapi.dto.QuestionDTO;
+import com.example.jadeapi.dto.QuizDisplayDTO;
+import com.example.jadeapi.dto.StartQuizDTO;
+import com.example.jadeapi.dto.StudentAnswerDTO;
+import com.example.jadeapi.model.Alternative;
+import com.example.jadeapi.model.Question;
+import com.example.jadeapi.model.Quiz;
+import com.example.jadeapi.model.QuizAttempt;
+import com.example.jadeapi.model.User;
+import com.example.jadeapi.model.UserAnswer;
+import com.example.jadeapi.model.enums.AttemptStatus;
+import com.example.jadeapi.repository.AlternativeRepository;
+import com.example.jadeapi.repository.QuestionRepository;
+import com.example.jadeapi.repository.QuizAttemptRepository;
+import com.example.jadeapi.repository.QuizRepository;
+import com.example.jadeapi.repository.UserAnswerRepository;
+import com.example.jadeapi.repository.UserRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class QuizAttemptService {
@@ -33,14 +45,14 @@ public class QuizAttemptService {
     private final AlternativeRepository alternativeRepository;
     private final JadeService jadeService;
 
-   @Autowired
+    @Autowired
     public QuizAttemptService(QuizAttemptRepository quizAttemptRepository,
-                              UserRepository userRepository,
-                              QuizRepository quizRepository,
-                              UserAnswerRepository userAnswerRepository,
-                              QuestionRepository questionRepository,
-                              AlternativeRepository alternativeRepository,
-                              JadeService jadeService) {
+            UserRepository userRepository,
+            QuizRepository quizRepository,
+            UserAnswerRepository userAnswerRepository,
+            QuestionRepository questionRepository,
+            AlternativeRepository alternativeRepository,
+            JadeService jadeService) {
         this.quizAttemptRepository = quizAttemptRepository;
         this.userRepository = userRepository;
         this.quizRepository = quizRepository;
@@ -60,13 +72,12 @@ public class QuizAttemptService {
         QuizAttempt quizAttempt = new QuizAttempt(user, quiz);
         quizAttempt = quizAttemptRepository.save(quizAttempt);
 
-        // Notificar o TutorAgent sobre o início do quiz
         String startQuizMessage = String.format(
-            "{\"action\":\"quiz_started\", \"attemptId\":%d, \"quizId\":%d, \"userId\":%d, \"quizName\":\"%s\"}",
-            quizAttempt.getId(),
-            quiz.getId(),
-            user.getId(),
-            quiz.getName()
+                "{\"action\":\"quiz_started\", \"attemptId\":%d, \"quizId\":%d, \"userId\":%d, \"quizName\":\"%s\"}",
+                quizAttempt.getId(),
+                quiz.getId(),
+                user.getId(),
+                quiz.getName()
         );
         jadeService.enviarMensagem("tutor", startQuizMessage);
         System.out.println("Mensagem enviada ao tutor: " + startQuizMessage);
@@ -99,35 +110,33 @@ public class QuizAttemptService {
         Alternative selectedAlternative = alternativeRepository.findById(studentAnswerDTO.getSelectedAlternativeId())
                 .orElseThrow(() -> new EntityNotFoundException("Alternativa não encontrada com ID: " + studentAnswerDTO.getSelectedAlternativeId()));
 
-        // Verifica se a alternativa pertence à questão
         if (!selectedAlternative.getQuestion().getId().equals(question.getId())) {
             throw new IllegalArgumentException("A alternativa selecionada não pertence à questão informada.");
         }
 
-        // Verifica se já existe uma resposta para esta questão nesta tentativa
-        UserAnswer existingAnswer = userAnswerRepository.findByQuizAttemptAndQuestion(quizAttempt, question);
-        if (existingAnswer != null) {
+        UserAnswer userAnswer = userAnswerRepository.findByQuizAttemptAndQuestion(quizAttempt, question);
+        if (userAnswer != null) {
             // Atualiza a resposta existente
-            existingAnswer.setSelectedAlternative(selectedAlternative);
-            existingAnswer.setAnsweredAt(LocalDateTime.now());
-            userAnswerRepository.save(existingAnswer);
-
-            UserAnswer userAnswer = new UserAnswer(question, selectedAlternative, quizAttempt);
+            userAnswer.setSelectedAlternative(selectedAlternative); // O setter em UserAnswer deve atualizar isCorrectAtSubmission
+            userAnswer.setAnsweredAt(LocalDateTime.now());
             userAnswerRepository.save(userAnswer);
+            System.out.println("Resposta existente atualizada para Questão ID: " + question.getId() + " na Tentativa ID: " + attemptId);
+            // NÃO crie uma nova UserAnswer aqui
         } else {
             // Cria uma nova resposta
-            UserAnswer userAnswer = new UserAnswer(question, selectedAlternative, quizAttempt);
+            userAnswer = new UserAnswer(question, selectedAlternative, quizAttempt);
             userAnswerRepository.save(userAnswer);
+            System.out.println("Nova resposta criada para Questão ID: " + question.getId() + " na Tentativa ID: " + attemptId);
         }
 
         String submitAnswerMessage = String.format(
-            "{\"action\":\"answer_submitted\", \"attemptId\":%d, \"questionId\":%d, \"selectedAlternativeId\":%d}",
-            attemptId,
-            studentAnswerDTO.getQuestionId(),
-            studentAnswerDTO.getSelectedAlternativeId()
+                "{\"action\":\"answer_submitted\", \"attemptId\":%d, \"questionId\":%d, \"selectedAlternativeId\":%d}",
+                attemptId,
+                studentAnswerDTO.getQuestionId(),
+                studentAnswerDTO.getSelectedAlternativeId()
         );
         jadeService.enviarMensagem("evaluator", submitAnswerMessage);
-        System.out.println("Mensagem enviada ao evaluator: " + submitAnswerMessage); // Log para debug
+        System.out.println("Mensagem enviada ao evaluator: " + submitAnswerMessage);
     }
 
     @Transactional
@@ -142,78 +151,83 @@ public class QuizAttemptService {
         quizAttempt.setEndTime(LocalDateTime.now());
         quizAttempt.setStatus(AttemptStatus.COMPLETED);
 
-        // Calcular Score
-        List<UserAnswer> userAnswers = userAnswerRepository.findByQuizAttempt(quizAttempt);
-        double correctAnswers = 0;
-        for (UserAnswer userAnswer : userAnswers) {
-            if (userAnswer.getSelectedAlternative().isCorrect()) {
-                correctAnswers++;
-            }
-        }
+        // --- LÓGICA DE SCORE CORRIGIDA ---
+        List<Question> questionsInQuiz = quizAttempt.getQuiz().getQuestions();
+        int totalQuestionsInQuiz = questionsInQuiz.size();
+        double correctAnswersCount = 0;
 
-        int totalQuestionsInQuiz = quizAttempt.getQuiz().getQuestions().size();
         if (totalQuestionsInQuiz > 0) {
-            quizAttempt.setScore((correctAnswers / totalQuestionsInQuiz) * 100.0);
+            for (Question question : questionsInQuiz) {
+                UserAnswer userAnswer = userAnswerRepository.findByQuizAttemptAndQuestion(quizAttempt, question);
+                if (userAnswer != null && userAnswer.getSelectedAlternative() != null && userAnswer.getSelectedAlternative().isCorrect()) {
+                    correctAnswersCount++;
+                }
+            }
+            quizAttempt.setScore((correctAnswersCount / totalQuestionsInQuiz) * 100.0);
         } else {
             quizAttempt.setScore(0.0);
         }
+        // --- FIM DA LÓGICA DE SCORE CORRIGIDA ---
 
         quizAttemptRepository.save(quizAttempt);
-        // Notificar o EvaluatorAgent sobre a finalização da tentativa
-        String completeAttemptMessage = String.format(Locale.US, // Adiciona Locale.US aqui
-            "{\"action\":\"attempt_completed\", \"attemptId\":%d, \"userId\":%d, \"quizId\":%d, \"finalScore\":%.2f}",
-            quizAttempt.getId(),
-            quizAttempt.getUser().getId(),
-            quizAttempt.getQuiz().getId(),
-            quizAttempt.getScore()
+
+        String completeAttemptMessage = String.format(Locale.US,
+                "{\"action\":\"attempt_completed\", \"attemptId\":%d, \"userId\":%d, \"quizId\":%d, \"finalScore\":%.2f}",
+                quizAttempt.getId(),
+                quizAttempt.getUser().getId(),
+                quizAttempt.getQuiz().getId(),
+                quizAttempt.getScore()
         );
         jadeService.enviarMensagem("evaluator", completeAttemptMessage);
-        System.out.println("Mensagem enviada ao evaluator: " + completeAttemptMessage); // Log para debug
-        return getAttemptResult(attemptId); // Retorna o resultado detalhado
+        System.out.println("Mensagem enviada ao evaluator: " + completeAttemptMessage);
+
+        return getAttemptResult(attemptId);
     }
 
     public AttemptResultDTO getAttemptResult(Long attemptId) {
         QuizAttempt quizAttempt = quizAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new EntityNotFoundException("Tentativa de Quiz não encontrada com ID: " + attemptId));
 
-        List<UserAnswer> userAnswers = userAnswerRepository.findByQuizAttempt(quizAttempt);
+        // Para o feedback, precisamos da ÚLTIMA resposta para cada questão.
+        // A lógica atual de getAttemptResult já faz isso buscando todas as userAnswers da tentativa
+        // e depois, para cada questão do quiz, pegando a correspondente.
+        // Como corrigimos submitAnswer para não criar duplicatas, userAnswers conterá uma por questão.
+        List<UserAnswer> userAnswersForFeedback = userAnswerRepository.findByQuizAttempt(quizAttempt);
         List<AnswerFeedbackDTO> answerFeedbacks = new ArrayList<>();
 
         for (Question question : quizAttempt.getQuiz().getQuestions()) {
-            UserAnswer userAnswer = userAnswers.stream()
+            // Encontra a resposta do usuário para esta questão específica na lista de respostas da tentativa
+            UserAnswer userAnswer = userAnswersForFeedback.stream()
                     .filter(ua -> ua.getQuestion().getId().equals(question.getId()))
-                    .findFirst()
-                    .orElse(null); // Encontra a resposta do usuário para esta questão
+                    .findFirst() // Deve haver apenas uma devido à correção em submitAnswer
+                    .orElse(null);
 
             Alternative correctAlternative = question.getAlternatives().stream()
                     .filter(Alternative::isCorrect)
                     .findFirst()
                     .orElseThrow(() -> new EntityNotFoundException("Alternativa correta não encontrada para a questão ID: " + question.getId()));
 
-            if (userAnswer != null) {
-                answerFeedbacks.add(new AnswerFeedbackDTO(
-                        question.getId(),
-                        question.getBody(),
-                        userAnswer.getSelectedAlternative().getId(),
-                        userAnswer.getSelectedAlternative().getBody(),
-                        userAnswer.getSelectedAlternative().isCorrect(),
-                        correctAlternative.getId(),
-                        correctAlternative.getBody(),
-                        correctAlternative.getJustification()
-                ));
-            } else {
-                // Caso a questão não tenha sido respondida
-                answerFeedbacks.add(new AnswerFeedbackDTO(
-                        question.getId(),
-                        question.getBody(),
-                        null, // Nenhuma alternativa selecionada
-                        null,
-                        false, // Não está correta pois não foi respondida
-                        correctAlternative.getId(),
-                        correctAlternative.getBody(),
-                        correctAlternative.getJustification()
-                ));
+            boolean isActuallyCorrect = false; // Determina a correção para o DTO
+            Long selectedAlternativeIdForDto = null;
+            String selectedAlternativeBodyForDto = null;
+
+            if (userAnswer != null && userAnswer.getSelectedAlternative() != null) {
+                selectedAlternativeIdForDto = userAnswer.getSelectedAlternative().getId();
+                selectedAlternativeBodyForDto = userAnswer.getSelectedAlternative().getBody();
+                // A correção final é baseada na alternativa selecionada na UserAnswer
+                isActuallyCorrect = userAnswer.getSelectedAlternative().isCorrect();
             }
+
+            answerFeedbacks.add(new AnswerFeedbackDTO(
+                    question.getId(),
+                    question.getBody(),
+                    selectedAlternativeIdForDto,
+                    selectedAlternativeBodyForDto,
+                    isActuallyCorrect, // Usa a correção da alternativa efetivamente selecionada
+                    correctAlternative.getId(),
+                    correctAlternative.getBody(),
+                    correctAlternative.getJustification()
+            ));
         }
 
         return new AttemptResultDTO(
@@ -221,7 +235,7 @@ public class QuizAttemptService {
                 quizAttempt.getQuiz().getId(),
                 quizAttempt.getQuiz().getName(),
                 quizAttempt.getUser().getId(),
-                quizAttempt.getScore(),
+                quizAttempt.getScore(), // Score calculado corretamente
                 quizAttempt.getStartTime(),
                 quizAttempt.getEndTime(),
                 quizAttempt.getStatus().toString(),

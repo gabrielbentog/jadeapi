@@ -64,6 +64,12 @@
             <version>3.0.2</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20231013</version>
+        </dependency>
+
         <!-- JADE -->
         <dependency>
             <groupId>com.tilab.jade</groupId>

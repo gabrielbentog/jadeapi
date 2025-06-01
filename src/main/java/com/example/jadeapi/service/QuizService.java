@@ -2,7 +2,9 @@ package com.example.jadeapi.service;
 
 import com.example.jadeapi.dto.QuizInfoDTO;
 import com.example.jadeapi.model.Quiz;
+import com.example.jadeapi.model.Subject; // Importar Subject
 import com.example.jadeapi.repository.QuizRepository;
+import jakarta.persistence.EntityNotFoundException; // Para o getQuizById exemplo
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +24,7 @@ public class QuizService {
         this.quizRepository = quizRepository;
     }
 
-    @Transactional(readOnly = true) // Boa prática para métodos de leitura
+    @Transactional(readOnly = true)
     public List<QuizInfoDTO> getAllQuizzes() {
         return quizRepository.findAll().stream()
                 .map(this::convertToQuizInfoDTO)
@@ -36,23 +38,33 @@ public class QuizService {
     }
 
     private QuizInfoDTO convertToQuizInfoDTO(Quiz quiz) {
+        Long subjectId = null;
+        String subjectName = null;
+        if (quiz.getSubject() != null) {
+            subjectId = quiz.getSubject().getId();
+            subjectName = quiz.getSubject().getName();
+        }
         return new QuizInfoDTO(
                 quiz.getId(),
                 quiz.getName(),
                 quiz.getDescription(),
-                quiz.getDifficulty()
-                // Se você adicionou subjectName ao QuizInfoDTO, mapeie-o aqui:
-                // quiz.getSubject() != null ? quiz.getSubject().getName() : null
+                quiz.getDifficulty(),
+                subjectId,      // Passando subjectId
+                subjectName     // Passando subjectName
         );
     }
 
-    // Você pode adicionar outros métodos aqui, como criar, atualizar, deletar quizzes,
-    // buscar por ID, etc., conforme a necessidade do seu sistema.
-    // Exemplo:
-    // @Transactional(readOnly = true)
-    // public QuizInfoDTO getQuizById(Long id) {
-    //     Quiz quiz = quizRepository.findById(id)
-    //             .orElseThrow(() -> new EntityNotFoundException("Quiz não encontrado com ID: " + id));
-    //     return convertToQuizInfoDTO(quiz);
-    // }
+    @Transactional(readOnly = true)
+    public QuizInfoDTO getQuizInfoById(Long id) { // Renomeado para evitar conflito se houver getQuizById que retorna Entidade
+        Quiz quiz = quizRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Quiz não encontrado com ID: " + id));
+        return convertToQuizInfoDTO(quiz);
+    }
+    
+    // Se você precisar da entidade Quiz completa em algum outro lugar:
+    @Transactional(readOnly = true)
+    public Quiz getQuizEntityById(Long id) {
+        return quizRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Quiz (Entidade) não encontrado com ID: " + id));
+    }
 }

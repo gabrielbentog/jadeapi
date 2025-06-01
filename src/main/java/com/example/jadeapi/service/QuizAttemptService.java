@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.example.jadeapi.JadeService;
+import java.util.Locale;
 
 @Service
 public class QuizAttemptService {
@@ -159,7 +160,7 @@ public class QuizAttemptService {
 
         quizAttemptRepository.save(quizAttempt);
         // Notificar o EvaluatorAgent sobre a finalização da tentativa
-        String completeAttemptMessage = String.format(
+        String completeAttemptMessage = String.format(Locale.US, // Adiciona Locale.US aqui
             "{\"action\":\"attempt_completed\", \"attemptId\":%d, \"userId\":%d, \"quizId\":%d, \"finalScore\":%.2f}",
             quizAttempt.getId(),
             quizAttempt.getUser().getId(),
